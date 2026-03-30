@@ -10,24 +10,24 @@ Numerical verification of the main results in:
   N. M. Matzakos, "Activation Saturation and Floquet Spectrum
   Collapse in Neural ODEs", arXiv preprint, 2026.
 
-Πειράματα
-─────────
-A  Εξασθένηση Ιακωβιανού (Theorem thm:main, §3).
-   Αρχιτεκτονική:  f(h; s) = W₂ · tanh(s·(W₁·h + b₁)) + b₂
-   Επαλήθευση:  ‖Df_θ(h₀; s)‖₂  ≤  C_W(s) · δ(h₀, s)
+Experiments
+───────────
+A  Jacobian attenuation (Theorem thm:main, §3).
+   Architecture:  f(h; s) = W₂ · tanh(s·(W₁·h + b₁)) + b₂
+   Verification:  ‖Df_θ(h₀; s)‖₂  ≤  C_W(s) · δ(h₀, s)
 
-B  Γεωμετρία εμποδίου Floquet–Liouville (Theorem thm:liouville, §4).
-   Το φράγμα |ln det M_γ| ≤ d·C(U)·T ισχύει μόνο όταν η τροχιά
-   βρίσκεται σε περιοχή χωρίς μηδενικά pre-activations (zero crossings).
+B  Geometry of Floquet–Liouville obstruction (Theorem thm:liouville, §4).
+   The bound |ln det M_γ| ≤ d·C(U)·T holds only when the orbit
+   is in a region without zero pre-activations (zero crossings).
 
-C  Πορτρέτα φάσης του ḣ = f_θ(h; s) για ήπιο / μέτριο / ισχυρό κορεσμό.
-   Ξεχωριστό 256-unit MLP εκπαιδευμένο ΜΕ bias (frozen b₁, row-norm
-   projection) ώστε δ → 0 καθώς s → ∞.
+C  Phase portraits of ḣ = f_θ(h; s) for mild / moderate / strong saturation.
+   Separate 256-unit MLP trained WITH bias (frozen b₁, row-norm
+   projection) so that δ → 0 as s → ∞.
 
-D  Αναφορά: ακριβής μονοδρομία Stuart–Landau vs φράγμα.
+D  Reference: exact Stuart–Landau monodromy vs bound.
 
-Εξαρτήσεις:  numpy, scipy, matplotlib
-Εκτέλεση:    python numerical_experiment.py
+Dependencies:  numpy, scipy, matplotlib
+Execution:    python numerical_experiment.py
 """
 
 import os
@@ -39,7 +39,7 @@ import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Σταθερές
+# Constants
 # ─────────────────────────────────────────────────────────────────────────────
 SEED   = 42
 HIDDEN = 32
@@ -53,11 +53,11 @@ np.random.seed(SEED)
 # ─────────────────────────────────────────────────────────────────────────────
 class TanhMLP:
     """
-    Μονοεπίπεδο tanh-MLP  f: ℝ² → ℝ²
+    Single-layer tanh-MLP  f: ℝ² → ℝ²
 
         f(h; s) = W₂ · tanh(s·(W₁·h + b₁)) + b₂
 
-    Τα βάρη παγώνουν μετά την .fit().  Η παράμετρος s ελέγχει τον κορεσμό.
+    Weights freeze after .fit(). The parameter s controls saturation.
     """
 
     def __init__(self, n_hidden=HIDDEN):
@@ -72,30 +72,30 @@ class TanhMLP:
         return self.W2 @ np.tanh(a) + self.b2
 
     def jacobian(self, h, s=1.0):
-        """Ιακωβιανός: Df(h;s) = W₂ · diag(sech²(s·(W₁h+b₁))) · s·W₁."""
+        """Jacobian: Df(h;s) = W₂ · diag(sech²(s·(W₁h+b₁))) · s·W₁."""
         a = s * (self.W1 @ h + self.b1)
         D = np.diag(1.0 - np.tanh(a)**2)
         return self.W2 @ D @ (s * self.W1)
 
     def delta(self, h, s=1.0):
-        """Βαθμός κορεσμού: δ = max_i sech²(s·(W₁h+b₁)_i)."""
+        """Saturation level: δ = max_i sech²(s·(W₁h+b₁)_i)."""
         a = s * (self.W1 @ h + self.b1)
         return float(np.max(1.0 - np.tanh(a)**2))
 
     def CW(self, s=1.0):
-        """Σταθερά βαρών: C_W(s) = s·‖W₁‖₂·‖W₂‖₂."""
+        """Weight constant: C_W(s) = s·‖W₁‖₂·‖W₂‖₂."""
         return s * np.linalg.norm(self.W1, ord=2) * np.linalg.norm(self.W2, ord=2)
 
     def fit(self, n_iters=7000, lr=0.012, verbose=True, bias_const=0.0,
             N_data=1500, use_adam=False):
         """
-        Προσαρμογή MSE στο f_SL(x,y) = (x−y−xr², x+y−yr²), 0.1 ≤ r ≤ 2.
+        Fit MSE to f_SL(x,y) = (x−y−xr², x+y−yr²), 0.1 ≤ r ≤ 2.
 
-        bias_const : αν > 0, ΜΗ-ΕΚΠΑΙΔΕΥΣΙΜΗ σταθερά προστίθεται στο b₁
-                     κατά το forward pass.  Το b₁ ΠΑΓΩΝΕΙ (δεν ενημερώνεται)
-                     ώστε ο optimizer να μην αναιρεί τη μετατόπιση.
-                     Μετά την εκπαίδευση, η σταθερά ενσωματώνεται στο b₁.
-        use_adam   : αν True, χρήση Adam optimizer.
+        bias_const : if > 0, NON-TRAINABLE constant is added to b₁
+                     during forward pass. b₁ FREEZES (not updated)
+                     so the optimizer doesn't undo the shift.
+                     After training, the constant is integrated into b₁.
+        use_adam   : if True, use Adam optimizer.
         """
         N  = N_data
         r  = np.random.uniform(0.1, 2.0, N)
@@ -105,14 +105,14 @@ class TanhMLP:
         F  = np.column_stack([H[:,0]-H[:,1]-H[:,0]*r2,
                                H[:,0]+H[:,1]-H[:,1]*r2])
 
-        # Ποιες παράμετροι εκπαιδεύονται
+        # Which parameters are trained
         freeze_b1 = (bias_const > 0)
         if freeze_b1:
-            params = [self.W1, self.W2, self.b2]  # b₁ παγωμένο
+            params = [self.W1, self.W2, self.b2]  # b₁ frozen
         else:
             params = [self.W1, self.b1, self.W2, self.b2]
 
-        # Κατάσταση Adam
+        # Adam state
         if use_adam:
             beta1, beta2, eps = 0.9, 0.999, 1e-8
             m = [np.zeros_like(p) for p in params]
@@ -126,7 +126,7 @@ class TanhMLP:
             err = Fp - F
             loss = 0.5 * np.mean(err**2)
 
-            # Κλίσεις (gradients)
+            # Gradients (partial derivatives)
             g   = err / N
             gW2 = g.T @ Z
             gb2 = g.sum(0)
@@ -150,10 +150,10 @@ class TanhMLP:
                 for grad, p in zip(grads, params):
                     p -= lr * grad
 
-            # Προβολή: κρατάμε ‖W₁_j‖ ≤ bias_const - margin
-            # ώστε στον μοναδιαίο κύκλο (‖h‖=1):
+            # Projection: keep ‖W₁_j‖ ≤ bias_const - margin
+            # so that on the unit circle (‖h‖=1):
             #   a_j = W₁_j·h + bias_const ≥ bias_const - ‖W₁_j‖ ≥ margin > 0
-            # margin ≥ 0.5 εξασφαλίζει sech²(s·margin) → 0 με αυξανόμενο s
+            # margin ≥ 0.5 ensures sech²(s·margin) → 0 as s increases
             if bias_const > 0:
                 margin = 0.5
                 max_norm = bias_const - margin
@@ -170,43 +170,43 @@ class TanhMLP:
             if verbose and it % 2000 == 0:
                 print(f"      iter {it:5d}: MSE = {loss:.6f}")
         self.W1, self.b1, self.W2, self.b2 = best
-        # Ενσωμάτωση της μη-εκπαιδεύσιμης σταθεράς στο b₁
+        # Incorporate the non-trainable constant into b₁
         self.b1 += bias_const
         if verbose:
             print(f"      Final MSE = {bloss:.6f}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Βοηθητικές συναρτήσεις
+# Helper functions
 # ─────────────────────────────────────────────────────────────────────────────
 def circle_orbit(R, n=400):
-    """Σημεία στον κύκλο ακτίνας R: πίνακας (n, 2)."""
+    """Points on circle of radius R: array (n, 2)."""
     t = np.linspace(0, 2*np.pi, n, endpoint=False)
     return np.column_stack([R*np.cos(t), R*np.sin(t)])
 
 
 def C_orbit(mlp, orbit, s):
-    """C(U) = max_{h ∈ τροχιά} ‖Df_θ(h; s)‖₂."""
+    """C(U) = max_{h ∈ orbit} ‖Df_θ(h; s)‖₂."""
     return max(np.linalg.norm(mlp.jacobian(h, s), ord=2) for h in orbit)
 
 
 def delta_orbit(mlp, orbit, s):
-    """δ(U,s) = max_{h ∈ τροχιά} max_i sech²(s·a_i(h))."""
+    """δ(U,s) = max_{h ∈ orbit} max_i sech²(s·a_i(h))."""
     return max(mlp.delta(h, s) for h in orbit)
 
 
 def lndetM_laj(mlp, orbit, s, T):
     """
-    Ολοκλήρωμα Liouville–Abel–Jacobi κατά μήκος κλειστής καμπύλης:
-        ln det M = ∫₀ᵀ Tr(Df_θ(γ(t); s)) dt    (κανόνας μέσου σημείου).
-    orbit: (n, 2) — n ισαπέχοντα σημεία πάνω στην καμπύλη.
+    Liouville–Abel–Jacobi integral along a closed curve:
+        ln det M = ∫₀ᵀ Tr(Df_θ(γ(t); s)) dt    (midpoint rule).
+    orbit: (n, 2) — n evenly spaced points on the curve.
     """
     traces = np.array([np.trace(mlp.jacobian(h, s)) for h in orbit])
     return traces.mean() * T
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 2.  Πείραμα Α — Εξασθένηση Ιακωβιανού (Theorem thm:main, §3)
+# 2.  Experiment A — Jacobian attenuation (Theorem thm:main, §3)
 # ─────────────────────────────────────────────────────────────────────────────
 def experiment_A(mlp, h0=None, s_values=None):
     if h0 is None:
@@ -237,7 +237,7 @@ def experiment_A(mlp, h0=None, s_values=None):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 3.  Πείραμα Β — Εμπόδιο Floquet–Liouville (Theorem thm:liouville, §4)
+# 3.  Experiment B — Floquet–Liouville obstruction (Theorem thm:liouville, §4)
 # ─────────────────────────────────────────────────────────────────────────────
 def experiment_B(mlp, s_values=None, T=T_SL, n_pts=500, bias_offsets=None):
     """
@@ -299,7 +299,7 @@ def experiment_B(mlp, s_values=None, T=T_SL, n_pts=500, bias_offsets=None):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 4.  Πείραμα D — Επαλήθευση αναφοράς Stuart–Landau (Theorem thm:liouville)
+# 4.  Experiment D — Reference verification Stuart–Landau (Theorem thm:liouville)
 # ─────────────────────────────────────────────────────────────────────────────
 def experiment_D():
     """
@@ -346,13 +346,13 @@ def experiment_D():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 5.  Βοηθητική συνάρτηση πορτρέτου φάσης
+# 5.  Helper function for phase portrait
 # ─────────────────────────────────────────────────────────────────────────────
 def phase_portrait(rhs_fn, ax, title, T_int=30.0, xlim=2.5):
     """
-    Γενικό πορτρέτο φάσης.  rhs_fn(t, h) → dh/dt.
-    Ολοκλήρωση από 8 γωνίες × 4 ακτίνες.
-    Κουκκίδες με μαύρο περίγραμμα: αρχικές συνθήκες.
+    Generic phase portrait.  rhs_fn(t, h) → dh/dt.
+    Integration from 8 angles × 4 radii.
+    Dots with black outline: initial conditions.
     """
     n_angles = 8
     angles   = np.linspace(0, 2*np.pi, n_angles, endpoint=False)
@@ -375,16 +375,16 @@ def phase_portrait(rhs_fn, ax, title, T_int=30.0, xlim=2.5):
                             method='RK45', rtol=1e-9, atol=1e-11,
                             max_step=0.02, events=escape)
             xs, ys = sol.y[0], sol.y[1]
-            # τροχιές κοντά στον limit cycle: πιο παχιές
+            # Orbits near limit cycle: thicker
             lw  = 1.2 if r0 in (0.7, 1.3) else 0.7
             alp = 0.85 if r0 in (0.7, 1.3) else 0.5
             ax.plot(xs, ys, lw=lw, color=palette[j], alpha=alp)
 
-            # δείκτης αρχικής συνθήκης
+            # Initial condition indicator
             ax.plot(*h0, 'o', ms=4.0, color=palette[j], zorder=7,
                     markeredgecolor='k', markeredgewidth=0.6)
 
-    # Αναφορά: limit cycle Stuart–Landau (μοναδιαίος κύκλος)
+    # Reference: Stuart–Landau limit cycle (unit circle)
     phi = np.linspace(0, 2*np.pi, 300)
     ax.plot(np.cos(phi), np.sin(phi), 'k--', lw=1.6,
             label='SL limit cycle', zorder=3)
@@ -401,7 +401,7 @@ def phase_portrait(rhs_fn, ax, title, T_int=30.0, xlim=2.5):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 6.  Σχεδιασμός γραφημάτων
+# 6.  Plot generation
 # ─────────────────────────────────────────────────────────────────────────────
 COLORS = {1: '#1f77b4', 2: '#ff7f0e', 5: '#2ca02c', 10: '#d62728'}
 LSMAP  = {1: '-o',      2: '-s',      5: '-^',      10: '-D'}
@@ -422,13 +422,13 @@ def make_plots(res_A, res_B, res_D, mlp, outdir):
     os.makedirs(outdir, exist_ok=True)
 
     # ═════════════════════════════════════════════════════════════════════
-    # Σχήμα 1: Πείραμα Α — Εξασθένηση Ιακωβιανού
+    # Figure 1: Experiment A — Jacobian attenuation
     # ═════════════════════════════════════════════════════════════════════
     fig1, axes1 = plt.subplots(1, 2, figsize=(13, 5))
     ax1, ax2    = axes1
     s = res_A['s']
 
-    # Αριστερό panel: νόρμα vs φράγμα
+    # Left panel: norm vs bound
     ax1.semilogy(s, res_A['actual_norm'], 'b-',  lw=2.2,
                  label=r'$\|Df_\theta(h_0;\,s)\|_2$')
     ax1.semilogy(s, res_A['bound'],       'r--', lw=2.2,
@@ -442,7 +442,7 @@ def make_plots(res_A, res_B, res_D, mlp, outdir):
     ax1.legend(fontsize=9)
     ax1.grid(True, which='both', alpha=0.25)
 
-    # Δεξί panel: αποσύνθεση φράγματος
+    # Right panel: bound decomposition
     ax2.semilogy(s, res_A['delta'], 'g-',  lw=2.2,
                  label=r'$\delta(s)$  (saturation)')
     ax2.semilogy(s, res_A['CW'],    'm--', lw=2.2,
@@ -468,8 +468,8 @@ def make_plots(res_A, res_B, res_D, mlp, outdir):
     plt.close(fig1)
 
     # ═════════════════════════════════════════════════════════════════════
-    # Σχήμα 2: Πείραμα Β — Εμπόδιο Floquet: biased vs unbiased
-    # Ένα μόνο panel: φράγμα d·C(U)·T ως συνάρτηση του s
+    # Figure 2: Experiment B — Floquet obstruction: biased vs unbiased
+    # Single panel: bound d·C(U)·T as function of s
     # ═════════════════════════════════════════════════════════════════════
     fig2, ax_b = plt.subplots(figsize=(8, 5))
     bias_colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728']
@@ -509,14 +509,14 @@ def make_plots(res_A, res_B, res_D, mlp, outdir):
     plt.close(fig2)
 
     # ═════════════════════════════════════════════════════════════════════
-    # Σχήμα 3: Πείραμα D — Επαλήθευση LAJ Stuart–Landau
-    # Δύο panels: (α) bar chart σύγκρισης, (β) πίνακας τιμών
+    # Figure 3: Experiment D — LAJ verification Stuart–Landau
+    # Two panels: (a) bar chart comparison, (b) table of values
     # ═════════════════════════════════════════════════════════════════════
     c = res_D
     fig3, (ax_d1, ax_d2) = plt.subplots(1, 2, figsize=(12, 4.5),
                                          gridspec_kw={'width_ratios': [3, 2]})
 
-    # Αριστερό panel: bar chart — αριθμητικό vs ακριβές
+    # Left panel: bar chart — numerical vs exact
     labels = [r'$\mathrm{Tr}(Df_{SL})$',
               r'$\ln\det M_\gamma$',
               r'$\det M_\gamma$  ($\times 10^{6}$)']
@@ -541,7 +541,7 @@ def make_plots(res_A, res_B, res_D, mlp, outdir):
     ax_d1.grid(axis='y', alpha=0.25)
     ax_d1.axhline(0, color='k', lw=0.5)
 
-    # Δεξί panel: πίνακας τιμών
+    # Right panel: table of values
     ax_d2.axis('off')
     table_data = [
         [r'Tr$(Df_{SL})$', f'{c["Tr_constant"]:.5f}', '$-2$'],
@@ -558,7 +558,7 @@ def make_plots(res_A, res_B, res_D, mlp, outdir):
     tbl.auto_set_font_size(False)
     tbl.set_fontsize(10)
     tbl.scale(1.0, 1.6)
-    # Χρωματισμός header
+    # Color header
     for j in range(3):
         tbl[0, j].set_facecolor('#4682B4')
         tbl[0, j].set_text_props(color='white', fontweight='bold')
@@ -576,49 +576,49 @@ def make_plots(res_A, res_B, res_D, mlp, outdir):
     plt.close(fig3)
 
     # ═════════════════════════════════════════════════════════════════════
-    # Σχήμα 4: Πορτρέτα φάσης — 256-unit MLP εκπαιδευμένο ΜΕ bias
+    # Figure 4: Phase portraits — 256-unit MLP trained WITH bias
     # ═════════════════════════════════════════════════════════════════════
     #
-    # Ξεχωριστό ευρύτερο δίκτυο (256 νευρώνες) εκπαιδεύεται ΜΕ
-    # μη-εκπαιδεύσιμη σταθερά bias, παγωμένο b₁, και προβολή
-    # γραμμικών νορμών (row-norm projection).  Αυτό εγγυάται:
-    #   (α) καλή προσέγγιση SL στο s=1
-    #   (β) όλα τα pre-activations > 0 στην τροχιά → δ → 0 με s
+    # Separate wider network (256 neurons) trained WITH
+    # non-trainable constant bias, frozen b₁, and row-norm
+    # projection. This ensures:
+    #   (a) good approximation of SL at s=1
+    #   (b) all pre-activations > 0 on orbit → δ → 0 as s
     #
-    # Panel 0: ακριβής Stuart–Landau (αναφορά).
-    # Panels 1–3: biased MLP στο s = 1, 4, 15 με δ και ln det M.
+    # Panel 0: exact Stuart–Landau (reference).
+    # Panels 1–3: biased MLP at s = 1, 4, 15 with δ and ln det M.
 
-    print('\n  [Πορτρέτα φάσης] Εκπαίδευση 256-unit MLP με bias …')
+    print('\n  [Phase portraits] Training 256-unit MLP with bias …')
     bias_c = 2.5
     np.random.seed(SEED + 1)
     mlp_wide = TanhMLP(n_hidden=256)
     mlp_wide.fit(n_iters=40000, lr=0.001, verbose=True,
                  bias_const=bias_c, N_data=3000, use_adam=True)
 
-    # Έλεγχος ότι τα pre-activations είναι θετικά στον μοναδιαίο κύκλο
+    # Check that pre-activations are positive on unit circle
     orb_check = circle_orbit(1.0, 500)
     min_pa = min(
         (mlp_wide.W1 @ h + mlp_wide.b1).min() for h in orb_check
     )
-    print(f'  bias={bias_c:.3f}, min pre-act στην τροχιά={min_pa:.4f} '
-          f'{"✓>0" if min_pa > 0 else "✗ ΠΡΟΒΛΗΜΑ"}')
+    print(f'  bias={bias_c:.3f}, min pre-act on orbit={min_pa:.4f} '
+          f'{"✓>0" if min_pa > 0 else "✗ PROBLEM"}')
 
     def f_SL(t, h):
         x, y = h
         r2 = x**2 + y**2
         return np.array([x - y - x*r2, x + y - y*r2])
 
-    # Ακριβές ολοκλήρωμα Floquet του SL
+    # Exact Floquet integral of SL
     lndetM_exact = -4.0 * np.pi
 
-    # s = 1 (ήπιος κορεσμός), 4 (μέτριος), 15 (ισχυρός)
-    # Μεγαλύτερο εύρος s → πιο εμφανής η σταδιακή απώλεια ευστάθειας
+    # s = 1 (mild saturation), 4 (moderate), 15 (strong)
+    # Larger range of s → more visible gradual loss of stability
     s_vals  = [1.0, 4.0, 15.0]
-    # Μεγαλύτερο T_int για υψηλό s, ώστε να φανεί η αργή δυναμική
+    # Larger T_int for high s so slow dynamics are visible
     T_ints  = [25.0, 30.0, 40.0]
     fig4, axes4 = plt.subplots(1, 4, figsize=(18.0, 4.8))
 
-    # Panel 0: ακριβής Stuart–Landau
+    # Panel 0: exact Stuart–Landau
     phase_portrait(f_SL, axes4[0],
                    'Stuart\u2013Landau (exact)',
                    T_int=25.0)
@@ -629,13 +629,13 @@ def make_plots(res_A, res_B, res_D, mlp, outdir):
                   bbox=dict(boxstyle='round,pad=0.3',
                             fc='white', ec='gray', alpha=0.92))
 
-    # Panels 1–3: biased MLP σε αυξανόμενο s
+    # Panels 1–3: biased MLP at increasing s
     sat_labels = ['mild', 'moderate', 'strong']
     for ax, sv, Ti, slbl in zip(axes4[1:], s_vals, T_ints, sat_labels):
         phase_portrait(lambda t, h, _s=sv: mlp_wide(h, _s),
                        ax, '', T_int=Ti)
 
-        # Υπολογισμός δ και πραγματικού ολοκληρώματος Floquet
+        # Compute δ and actual Floquet integral
         dv     = delta_orbit(mlp_wide, orb_check, sv)
         lndetM = lndetM_laj(mlp_wide, orb_check, sv, T_SL)
         detM   = np.exp(lndetM)
@@ -665,7 +665,7 @@ def make_plots(res_A, res_B, res_D, mlp, outdir):
     plt.close(fig4)
 
     # ═════════════════════════════════════════════════════════════════════
-    # Σχήμα 5: Συνοπτικό panel (A + B + D σε ένα σχήμα)
+    # Figure 5: Summary panel (A + B + D in one figure)
     # ═════════════════════════════════════════════════════════════════════
     fig5 = plt.figure(figsize=(14, 10))
     gs   = GridSpec(2, 3, fig5, hspace=0.45, wspace=0.40)
@@ -714,7 +714,7 @@ def make_plots(res_A, res_B, res_D, mlp, outdir):
     ax_d = fig5.add_subplot(gs[1, 2])
     ax_d.axis('off')
     c = res_D
-    # Πίνακας τιμών αντί μεγάλου text block
+    # Table of values instead of large text block
     rows = [
         [r'Tr$(Df_{SL})$', f'{c["Tr_constant"]:.4f}', '$-2$'],
         [r'$\ln\det M$', f'{c["lndetM_numerical"]:.4f}',
@@ -749,62 +749,62 @@ def make_plots(res_A, res_B, res_D, mlp, outdir):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 7.  Κύριο πρόγραμμα
+# 7.  Main program
 # ─────────────────────────────────────────────────────────────────────────────
 def main():
     outdir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'figures')
     sep    = '═' * 62
     print(sep)
-    print('  Εξασθένηση Κορεσμού & Εμπόδιο Floquet–Liouville')
-    print('  Αριθμητική Επαλήθευση')
+    print('  Saturation Attenuation & Floquet–Liouville Obstruction')
+    print('  Numerical Verification')
     print(sep)
 
-    # ── 1α. Εκπαίδευση unbiased MLP (για Πειράματα A, B, D) ─────────
-    print('\n[1α] Εκπαίδευση UNBIASED tanh-MLP στον Stuart–Landau …')
+    # ── 1a. Train unbiased MLP (for Experiments A, B, D) ─────────
+    print('\n[1a] Training UNBIASED tanh-MLP on Stuart–Landau …')
     np.random.seed(SEED)
     mlp = TanhMLP()
     mlp.fit(n_iters=7000, verbose=True)
 
     row_norms = np.linalg.norm(mlp.W1, axis=1)
     c_min     = row_norms.max()
-    print(f'     c_min = μέγιστη row-norm W₁ = {c_min:.4f}')
+    print(f'     c_min = max row-norm W₁ = {c_min:.4f}')
 
-    # ── 2. Πείραμα Α ──────────────────────────────────────────────────
-    print('\n[2]  Πείραμα Α — Εξασθένηση Ιακωβιανού …')
+    # ── 2. Experiment A ──────────────────────────────────────────────────
+    print('\n[2]  Experiment A — Jacobian attenuation …')
     res_A = experiment_A(mlp, h0=np.array([0.8, 0.4]),
                           s_values=np.logspace(-0.5, 1.8, 60))
-    print(f'     Φράγμα ικανοποιείται πάντα: '
+    print(f'     Bound always satisfied: '
           f'{np.all(res_A["actual_norm"] <= res_A["bound"] * 1.001)}')
-    print(f'     ‖Df‖ εύρος: '
+    print(f'     ‖Df‖ range: '
           f'{res_A["actual_norm"].min():.3e} – {res_A["actual_norm"].max():.3e}')
 
-    # ── 3. Πείραμα Β ──────────────────────────────────────────────────
-    print('\n[3]  Πείραμα Β — Εμπόδιο Floquet (biased vs unbiased) …')
+    # ── 3. Experiment B ──────────────────────────────────────────────────
+    print('\n[3]  Experiment B — Floquet obstruction (biased vs unbiased) …')
     s_B         = np.logspace(-0.3, 1.4, 40)
     res_B, bias_offsets = experiment_B(mlp, s_values=s_B)
     for c_val, data in res_B.items():
-        avoids = 'ΧΩΡΙΣ zero crossings' if data['avoids_zero'] else 'ΜΕ zero crossings'
-        print(f'     c={c_val:5.2f}: εύρος φράγματος '
+        avoids = 'WITHOUT zero crossings' if data['avoids_zero'] else 'WITH zero crossings'
+        print(f'     c={c_val:5.2f}: bound range '
               f'{data["bound"].min():.3e} – {data["bound"].max():.3e}  '
               f'[{avoids}]')
 
-    # ── 4. Πείραμα D ──────────────────────────────────────────────────
-    print('\n[4]  Πείραμα D — Επαλήθευση LAJ Stuart–Landau …')
+    # ── 4. Experiment D ──────────────────────────────────────────────────
+    print('\n[4]  Experiment D — LAJ verification Stuart–Landau …')
     res_D = experiment_D()
-    print(f'     Tr(Df_SL) = {res_D["Tr_constant"]:.5f}  (ακριβές: -2.0)')
-    print(f'     LAJ ολοκλήρωμα: {res_D["lndetM_numerical"]:.5f}  '
-          f'(ακριβές: -4π = {res_D["lndetM_exact"]:.5f})')
-    print(f'     det M αριθμητικό: {res_D["detM_numerical"]:.4e}  '
-          f'(ακριβές: {res_D["detM_exact"]:.4e})')
-    print(f'     Φράγμα Θεωρ. 2: {res_D["bound"]:.4f} ≥ 4π = {4*np.pi:.4f}  '
+    print(f'     Tr(Df_SL) = {res_D["Tr_constant"]:.5f}  (exact: -2.0)')
+    print(f'     LAJ integral: {res_D["lndetM_numerical"]:.5f}  '
+          f'(exact: -4π = {res_D["lndetM_exact"]:.5f})')
+    print(f'     det M numerical: {res_D["detM_numerical"]:.4e}  '
+          f'(exact: {res_D["detM_exact"]:.4e})')
+    print(f'     Thm. 2 bound: {res_D["bound"]:.4f} ≥ 4π = {4*np.pi:.4f}  '
           f'✓ {res_D["bound"] >= 4*np.pi}')
 
-    # ── 5. Σχεδιασμός γραφημάτων ─────────────────────────────────────
-    print('\n[5]  Δημιουργία σχημάτων …')
+    # ── 5. Plot generation ─────────────────────────────────────
+    print('\n[5]  Generating figures …')
     make_plots(res_A, res_B, res_D, mlp, outdir)
 
     print(f'\n{sep}')
-    print(f'  Ολοκληρώθηκε.  Σχήματα: {outdir}/')
+    print(f'  Done.  Figures: {outdir}/')
     print(sep)
 
 
