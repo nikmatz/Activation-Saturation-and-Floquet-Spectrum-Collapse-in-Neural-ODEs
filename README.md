@@ -17,12 +17,9 @@ The paper proves that activation saturation imposes a structural dynamical limit
 
 | File | Description |
 |------|-------------|
-| `numerical_experiment.py` | **Illustrations A–D.** Jacobian attenuation, Floquet–Liouville obstruction, phase portraits, and Stuart–Landau exact monodromy verification. |
-| `exp_E_refined_bounds.py` | **Illustration E.** Refined vs original Jacobian bound via saturation-weighted spectral factorisation (Section 6). |
-| `exp_E_amplitude.py` | **Illustration E (amplitude).** tanh vs SiLU comparison at increasing orbit amplitude. |
-| `exp_F_individual_multipliers.py` | **Illustration F.** Individual Floquet multiplier bounds (Theorem 4.5) — verifies e^{−C(U)T} ≤ |μ_i| ≤ e^{C(U)T}. |
-| `plot_depth_comparison.py` | Supplementary: effect of saturation depth *q* on the bound. |
-| `ssilu_figures.py` | Supplementary: SSiLU activation function visualisations. |
+| `numerical_experiment.py` | **Illustrations A–D.** Jacobian attenuation (Fig. 1), Floquet–Liouville obstruction (Fig. 3), phase portraits (Fig. 2), and Stuart–Landau exact monodromy verification (Table 1). |
+| `exp_E_refined_bounds.py` | **Illustration E.** Refined vs original Jacobian bound via saturation-weighted spectral factorisation — Section 6 (Table 3, Fig. 5). |
+| `exp_F_individual_multipliers.py` | **Illustration F.** Individual Floquet multiplier bounds — Theorem 4.5 (Table 2, Fig. 4). |
 | `requirements.txt` | Python dependencies. |
 
 ## Quick start
